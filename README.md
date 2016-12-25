@@ -1,3 +1,40 @@
+## This fork has API changes
+
+This fork has been modified to improve handling of named parameters, and preventing collisions with blacklisted methods
+such as `sort`. It was updated specifically for [Kodi Chorus2](https://github.com/xbmc/chorus2) but all changes are
+generic so it could be used for other applications.
+
+* The option `useNamedParameters` can be passed via the RPC constructor options or overridden via collection fetch options
+* Named parameters are added via `Backbone.Collection.args` as a function rather than a property or function directly on the collection
+
+Example
+
+```javascript
+var Devices = Backbone.Collection.extend({
+	url: 'path/to/my/rpc/handler',
+	namespace: 'MeNotJava',
+    rpc: new Backbone.Rpc({
+        useNamedParameters: true
+    }),
+	model: Device,
+	args: function () { return {id: 123, fields: ['name', 'size'], sort: {method: 'name', order: 'descending'}} },
+	methods: {
+	    read : ['getDevices', 'id', 'fields', 'sort']
+	}
+});
+
+var devices = new Devices();
+devices.fetch();
+```
+
+OR
+
+```javascript
+devices.fetch({useNamedParameters: true});
+```
+
+*Only backbone.rpc.js has been updated with this fork and has not been tested outside of Chorus2*
+
 ## Backbone.Rpc
 
 > This repository is looking for a maintainer. Please open an issue if you want to help.
@@ -366,10 +403,9 @@ var Devices = Backbone.Collection.extend({
 	namespace: 'MeNotJava',
 	rpc: new Backbone.Rpc(),
 	model: Device,
-	arg1: 'hello',
-	arg2: function () { return 'world' },
+	args: function () { return {id: 123, fields: ['name', 'size'], sort: {method: 'name', order: 'descending'}} },
 	methods: {
-	    read : ['getDevices', 'arg1', 'arg2', 'arg3']
+	    read : ['getDevices', 'id', 'fields', 'sort']
 	}
 });
 

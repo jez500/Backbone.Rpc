@@ -197,12 +197,18 @@
                 exec                = null,
                 valuableDefinition  = [],
                 changedAttributes   = {},
-                def                 = null;
+                def                 = null,
+                collectionArgs      = model;
 
             // Named params can be set in the options for the class or the model.
             useNamed = (model.options && model.options.useNamedParameters) ? model.options.useNamedParameters : useNamed;
             if (useNamed) {
-                valuableDefinition = {}
+                valuableDefinition = {};
+                // Collection arguments are stored in model.args to prevent method collisions.
+                // This is changed from the original where arg functions were directly on the collection
+                if (_.isFunction(model.args)) {
+                    collectionArgs = model.args();
+                }
             }
 
             // rewrite method if name is delete
@@ -245,8 +251,8 @@
                             }
                         } else {
                             if (model instanceof Backbone.Collection) {
-                                if (model[param] !== undef) {
-                                    valuableDefinition = self.addParam(valuableDefinition, model, param, _.isFunction(model[param]), false);
+                                if (collectionArgs !== undef && collectionArgs[param] !== undef) {
+                                    valuableDefinition = self.addParam(valuableDefinition, collectionArgs, param, _.isFunction(collectionArgs[param]), false);
                                 } else {
                                     if (options[param] !== undef) {
                                         valuableDefinition = self.addParam(valuableDefinition, options, param, false, false);
@@ -421,7 +427,7 @@
                         options.success(data);
                     },
 
-                    // define a local error callback that will hand over the data to the backbone error handler
+                // define a local error callback that will hand over the data to the backbone error handler
                     errorCb = function (data) {
                         options.error(model, data);
                     };
