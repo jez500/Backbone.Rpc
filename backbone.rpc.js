@@ -1,28 +1,31 @@
-/*! Backbone.Rpc - v0.1.2
-------------------------------
-Build @ 2014-03-31
-Documentation and Full License Available at:
-http://asciidisco.github.com/Backbone.Rpc/index.html
-git://github.com/asciidisco/Backbone.Rpc.git
-Copyright (c) 2014 Sebastian Golasch <public@asciidisco.com>
+/*! Backbone.Rpc - v0.1.2a
+ ------------------------------
+ Build @ 2016-12-25
+ https://github.com/jez500/Backbone.Rpc
 
-Permission is hereby granted, free of charge, to any person obtaining a
-copy of this software and associated documentation files (the "Software"),
-to deal in the Software without restriction, including without limitation
-the rights to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of the Software, and to permit persons to whom the
+ Forked from:
+ Documentation and Full License Available at:
+ http://asciidisco.github.com/Backbone.Rpc/index.html
+ git://github.com/asciidisco/Backbone.Rpc.git
+ Copyright (c) 2014 Sebastian Golasch <public@asciidisco.com>
 
-Software is furnished to do so, subject to the following conditions:
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation
+ the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-IN THE SOFTWARE.*/
+ Software is furnished to do so, subject to the following conditions:
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ IN THE SOFTWARE.*/
 
 // Backbone.Rpc
 // Plugin for using the backbone js library with a remote json-rpc handler
@@ -59,11 +62,11 @@ IN THE SOFTWARE.*/
             // fix issue with the loss of this
             _.bindAll(this);
         },
-        // store the old Backbone.Model constructor for later use
+    // store the old Backbone.Model constructor for later use
         oldConst = Backbone.Model.prototype.constructor,
-        // store the old Backbone.sync method for later use
+    // store the old Backbone.sync method for later use
         oldSync = Backbone.sync,
-        // storage object to keep track of changes from the loaded objects
+    // storage object to keep track of changes from the loaded objects
         storage = {};
 
     // TODO: Document
@@ -148,7 +151,7 @@ IN THE SOFTWARE.*/
             this.responseID = id;
             // generate unique request id (timestamp)
             // check if params and the function name are ok, then...
-            if (_.isArray(params) && _.isString(fn)) {
+            if ((_.isArray(params) || _.isObject(params)) && _.isString(fn)) {
                 // send query
                 ret = $.ajax({
                     contentType : this.contentType + '; charset=' + this.charset,
@@ -156,10 +159,10 @@ IN THE SOFTWARE.*/
                     dataType    : 'json',
                     url         : this.url,
                     data        : JSON.stringify({
-                        jsonrpc : '2.0',
-                        method  : this.namespace + this.namespaceDelimiter + fn,
-                        id      : id,
-                        params  : params
+                        jsonrpc     : '2.0',
+                        method      : this.namespace + this.namespaceDelimiter + fn,
+                        id          : id,
+                        params      : params
                     }),
                     statusCode  : {
                         404: _.bind(function () { this.handleExceptions(this.exceptions['404']); }, this),
@@ -187,12 +190,20 @@ IN THE SOFTWARE.*/
 
         // TODO: Document
         checkMethods: function (cb, params, model, method, options, scb, ecb) {
-            var definition          = null,
+            var self                = this,
+                useNamed            = (this.options && this.options.useNamedParameters === true),
+                definition          = null,
                 deeperNested        = false,
                 exec                = null,
                 valuableDefinition  = [],
                 changedAttributes   = {},
                 def                 = null;
+
+            // Named params can be set in the options for the class or the model.
+            useNamed = (model.options && model.options.useNamedParameters) ? model.options.useNamedParameters : useNamed;
+            if (useNamed) {
+                valuableDefinition = {}
+            }
 
             // rewrite method if name is delete
             method = method === 'delete' ? 'remove' : method;
@@ -229,33 +240,31 @@ IN THE SOFTWARE.*/
                 if (def.length > 0) {
                     _.each(def, function (param) {
                         if (param === '') {
-                            valuableDefinition.push('');
+                            if (_.isArray(valuableDefinition)) {
+                                valuableDefinition.push('');
+                            }
                         } else {
                             if (model instanceof Backbone.Collection) {
                                 if (model[param] !== undef) {
-                                    if (_.isFunction(model[param])) {
-                                        valuableDefinition.push(model[param]());
-                                    } else {
-                                        valuableDefinition.push(model[param]);
-                                    }
+                                    valuableDefinition = self.addParam(valuableDefinition, model, param, _.isFunction(model[param]), false);
                                 } else {
                                     if (options[param] !== undef) {
-                                        valuableDefinition.push(options[param]);
+                                        valuableDefinition = self.addParam(valuableDefinition, options, param, false, false);
                                     }
                                 }
                             } else {
                                 if (model.get(param) !== undef) {
-                                    valuableDefinition.push(model.get(param));
+                                    valuableDefinition = self.addParam(valuableDefinition, model, param, false, true);
                                 } else {
                                     if (options[param] !== undef) {
-                                        valuableDefinition.push(options[param]);
+                                        valuableDefinition = self.addParam(valuableDefinition, options, param, false, false);
                                     }
                                 }
                             }
                         }
                     });
                 } else {
-                    valuableDefinition = [];
+                    valuableDefinition = (!_.isArray(valuableDefinition)) ? {} : [];
                 }
 
                 return cb(exec, valuableDefinition, scb, ecb);
@@ -274,6 +283,24 @@ IN THE SOFTWARE.*/
             });
 
             return null;
+        },
+
+        // TODO: Document
+        addParam: function (valuableDefinition, model, param, isFunc, isModel) {
+            var value;
+            if (isModel) {
+                value = model.get(param);
+            } else {
+                value = isFunc ? model[param]() : model[param];
+            }
+            if (!_.isArray(valuableDefinition)) {
+                if (value !== undef) {
+                    valuableDefinition[param] = value;
+                }
+            } else {
+                valuableDefinition.push(value);
+            }
+            return valuableDefinition;
         },
 
         // TODO: Document
@@ -349,50 +376,50 @@ IN THE SOFTWARE.*/
             sync = function (method, model, options) {
                 // Default success model callback
                 var successCb = function (data, error) {
-                    // check if we have an error object
-                    if (error !== null && error !== undef) {
-                        options.error(model, error);
-                        return this;
-                    }
+                        // check if we have an error object
+                        if (error !== null && error !== undef) {
+                            options.error(model, error);
+                            return this;
+                        }
 
-                    // check if the rpc is used in a Backbone.Collection instance
-                    if (model instanceof Backbone.Collection) {
-                        // check if we have valid response data
-                        if (data !== undef && data !== null) {
-                            // clone the data and tag it to track changes
-                            if (typeof data[0] === 'object') {
-                                _.each(data, function (item, key) {
-                                    item._rpcId = _.uniqueId('rpc_');
-                                    data[key] = item;
-                                    storage[item._rpcId] = item;
-                                });
-                            } else {
-                                _.each(data, function (item, key) {
-                                    storage[key] = item;
-                                });
+                        // check if the rpc is used in a Backbone.Collection instance
+                        if (model instanceof Backbone.Collection) {
+                            // check if we have valid response data
+                            if (data !== undef && data !== null) {
+                                // clone the data and tag it to track changes
+                                if (typeof data[0] === 'object') {
+                                    _.each(data, function (item, key) {
+                                        item._rpcId = _.uniqueId('rpc_');
+                                        data[key] = item;
+                                        storage[item._rpcId] = item;
+                                    });
+                                } else {
+                                    _.each(data, function (item, key) {
+                                        storage[key] = item;
+                                    });
+                                }
                             }
                         }
-                    }
 
-                    // clone and tag the data to track changes if we have a Backbone.Model instance
-                    if (model instanceof Backbone.Model && data !== undef && data !== null) {
-                        data._rpcId = _.uniqueId('rpc_');
-                        storage[data._rpcId] = data;
-                    }
+                        // clone and tag the data to track changes if we have a Backbone.Model instance
+                        if (model instanceof Backbone.Model && data !== undef && data !== null) {
+                            data._rpcId = _.uniqueId('rpc_');
+                            storage[data._rpcId] = data;
+                        }
 
-                    // change data attr to be an empty array, if it´s null or undefined
-                    if (data === undef || data === null) {
-                        data = [];
-                    }
+                        // change data attr to be an empty array, if it´s null or undefined
+                        if (data === undef || data === null) {
+                            data = [];
+                        }
 
-                    // invoke special return callback parser if defined
-                    if (model.parsers !== undef && model.parsers[method] !== undef && _.isFunction(model.parsers[method])) {
-                        model.parsers[method].apply(model, [data]);
-                    }
+                        // invoke special return callback parser if defined
+                        if (model.parsers !== undef && model.parsers[method] !== undef && _.isFunction(model.parsers[method])) {
+                            model.parsers[method].apply(model, [data]);
+                        }
 
-                    // fire the 'real' backbone success callback
-                    options.success(data);
-                },
+                        // fire the 'real' backbone success callback
+                        options.success(data);
+                    },
 
                     // define a local error callback that will hand over the data to the backbone error handler
                     errorCb = function (data) {
@@ -433,8 +460,8 @@ IN THE SOFTWARE.*/
                 return null;
             };
 
-         // Expose the previous Backbone.sync as Backbone.sync.previous in case
-         // the caller wishes to switch provider
+        // Expose the previous Backbone.sync as Backbone.sync.previous in case
+        // the caller wishes to switch provider
         sync.previous = oldSync;
 
         return sync;
